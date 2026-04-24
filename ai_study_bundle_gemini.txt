@@ -1,0 +1,563 @@
+GEMINI STUDY BUNDLE FOR THE PERSONAL FINANCE DASHBOARD
+
+Paste everything below into Gemini.
+
+PROMPT FOR GEMINI
+
+You are my programming tutor.
+Teach me this project step by step like I am a beginner-intermediate Python student who wants to learn how to build this exact app myself.
+
+Important instructions:
+1. Focus on the Python desktop app only.
+2. Ignore the leftover React scaffold unless I ask about it.
+3. Explain the code in the exact order it appears.
+4. For each section, tell me:
+   - what it does
+   - why it exists
+   - where the imported tools come from
+   - how I would write it myself
+   - common beginner mistakes
+5. Use simple language first, then give a slightly more technical explanation.
+6. Quote small code snippets when helpful, but do not paste huge blocks back unnecessarily.
+7. After each major section, give me 2-3 practice questions.
+8. At the end, give me:
+   - a full project recap
+   - a list of concepts I should study next
+   - 3 small improvements I can try building myself
+9. If your response is too long, continue in multiple parts and label them clearly.
+
+Please organize your explanation into these sections:
+1. High-level purpose of the app
+2. Imports and dependencies
+3. Constants and file storage
+4. Data loading and saving
+5. Tkinter app class structure
+6. UI layout and widgets
+7. Add/delete transaction logic
+8. Summary calculations
+9. Charts and matplotlib integration
+10. Budget and savings-goal logic
+11. Ollama AI advisor and chat integration
+12. AI history and export features
+13. Overall architecture and how I would build this from scratch
+
+PROJECT CONTEXT
+- This is the real working app.
+- It is a Python Tkinter desktop app.
+- It uses pandas, matplotlib, CSV/JSON files, and Ollama local APIs.
+- The main file is below.
+
+CODE STARTS HERE
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+from tkinter import font as tkfont
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from datetime import date, datetime
+import os
+import threading
+import json
+import csv
+import calendar
+from urllib import request, error
+
+DATA_FILE = "finance_data.csv"
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
+ADVICE_CSV_FILE = "ai_advice_history.csv"
+ADVICE_JSONL_FILE = "ai_advice_history.jsonl"
+
+# ---------- Data Layer ----------
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        df = pd.read_csv(DATA_FILE)
+        if "Date" in df.columns:
+            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        return df
+    return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "Description"])
+
+def save_data(df):
+    df.to_csv(DATA_FILE, index=False)
+
+# ---------- App ----------
+
+class FinanceDashboard(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Personal Finance Dashboard")
+        self.geometry("1180x780")
+        self.resizable(True, True)
+        self.configure(bg="#f0f2f5")
+
+        self.df = load_data()
+        self._ensure_date_column()
+        self.last_budget_alert_signature = None
+        self.last_savings_alert_month = None
+        self.ai_chat_turns = []
+        self.suggested_questions = [
+            "What are my top 3 overspending categories this month?",
+            "Give me a weekly plan to hit my monthly savings goal.",
+            "Which budget categories should I reduce first and by how much?",
+            "How can I improve cash flow in the next 14 days?",
+            "Analyze my recent transactions and flag risky spending patterns.",
+            "Create a realistic budget for next month based on my data.",
+        ]
+        self._configure_ui_for_usability()
+        self._build_ui()
+        self.refresh_all()
+
+    # ---- UI Construction ----
+
+    def _configure_ui_for_usability(self):
+        # Keep widget sizes readable on high-DPI displays.
+        self.tk.call("tk", "scaling", 1.6)
+        self.option_add("*Font", "Helvetica 12")
+        self.option_add("*Entry.Font", "Helvetica 12")
+        self.option_add("*Text.Font", "Helvetica 12")
+
+        default_font = tkfont.nametofont("TkDefaultFont")
+        default_font.configure(size=14)
+
+        text_font = tkfont.nametofont("TkTextFont")
+        text_font.configure(size=13)
+
+        heading_font = tkfont.nametofont("TkHeadingFont")
+        heading_font.configure(size=13, weight="bold")
+
+        menu_font = tkfont.nametofont("TkMenuFont")
+        menu_font.configure(size=12)
+
+        style = ttk.Style(self)
+        style.configure("TNotebook.Tab", padding=(20, 12), font=("Helvetica", 14, "bold"))
+        style.configure("Treeview", rowheight=38, font=("Helvetica", 12))
+        style.configure("Treeview.Heading", font=("Helvetica", 12, "bold"))
+        style.configure("TCombobox", padding=6)
+
+    def _build_ui(self):
+        # Header
+        header = tk.Frame(self, bg="#2c3e50", pady=18)
+        header.pack(fill="x")
+        tk.Label(header, text="Personal Finance Dashboard", font=("Helvetica", 26, "bold"),
+                 bg="#2c3e50", fg="white").pack()
+
+        # Main layout
+        main = tk.Frame(self, bg="#f0f2f5")
+        main.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Left panel: entry + summary
+        left = tk.Frame(main, bg="#f0f2f5", width=500)
+        left.pack(side="left", fill="y", padx=(0, 10))
+        left.pack_propagate(False)
+
+        self._build_entry_form(left)
+        self._build_summary(left)
+
+        # Right panel: tabs for charts + transactions
+        right = tk.Frame(main, bg="#f0f2f5")
+        right.pack(side="left", fill="both", expand=True)
+
+        notebook = ttk.Notebook(right)
+        notebook.pack(fill="both", expand=True)
+
+        self.chart_frame = tk.Frame(notebook, bg="white")
+        self.table_frame = tk.Frame(notebook, bg="white")
+        self.budget_frame = tk.Frame(notebook, bg="white")
+        self.ai_frame = tk.Frame(notebook, bg="white")
+        self.history_frame = tk.Frame(notebook, bg="white")
+
+        notebook.add(self.chart_frame, text="  Charts  ")
+        notebook.add(self.table_frame, text="  Transactions  ")
+        notebook.add(self.budget_frame, text="  Budget  ")
+        notebook.add(self.ai_frame, text="  AI Advisor  ")
+        notebook.add(self.history_frame, text="  AI History  ")
+
+        self._build_table(self.table_frame)
+        self._build_budget_tab(self.budget_frame)
+        self._build_ai_tab(self.ai_frame)
+        self._build_history_tab(self.history_frame)
+
+    def _build_entry_form(self, parent):
+        card = tk.LabelFrame(parent, text="Add Transaction", font=("Helvetica", 16, "bold"),
+                     bg="#f0f2f5", padx=16, pady=16)
+        card.pack(fill="x", pady=(0, 10))
+
+        fields = [("Date (YYYY-MM-DD)", "entry_date"),
+                  ("Type", "entry_type"),
+                  ("Category", "entry_category"),
+                  ("Amount ($)", "entry_amount"),
+                  ("Description", "entry_desc")]
+
+        for label, attr in fields:
+            tk.Label(card, text=label, bg="#f0f2f5", font=("Helvetica", 12, "bold")).pack(anchor="w")
+            if attr == "entry_type":
+                widget = ttk.Combobox(card, values=["Income", "Expense"], state="readonly", width=30, height=8)
+                widget.set("Expense")
+            elif attr == "entry_category":
+                widget = ttk.Combobox(card, values=[
+                    "Food", "Rent", "Transport", "Entertainment",
+                    "Utilities", "Healthcare", "Savings", "Salary", "Other"
+                ], width=30, height=10)
+                widget.set("Food")
+            else:
+                widget = tk.Entry(card, width=32, font=("Helvetica", 13))
+                if attr == "entry_date":
+                    widget.insert(0, str(date.today()))
+            widget.pack(pady=(3, 12), anchor="w", ipady=5)
+            setattr(self, attr, widget)
+
+        tk.Button(card, text="Add Transaction", command=self._add_transaction,
+                  bg="#27ae60", fg="white", font=("Helvetica", 13, "bold"),
+                  relief="flat", padx=14, pady=10, cursor="hand2").pack(fill="x", pady=(8, 0))
+
+    def _build_summary(self, parent):
+        self.summary_frame = tk.LabelFrame(parent, text="Summary", font=("Helvetica", 16, "bold"),
+                                           bg="#f0f2f5", padx=16, pady=16)
+        self.summary_frame.pack(fill="x")
+
+    def _build_table(self, parent):
+        cols = ("Date", "Type", "Category", "Amount", "Description")
+        frame = tk.Frame(parent, bg="white")
+        frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        scroll_y = ttk.Scrollbar(frame, orient="vertical")
+        scroll_y.pack(side="right", fill="y")
+
+        self.tree = ttk.Treeview(frame, columns=cols, show="headings",
+                                  yscrollcommand=scroll_y.set)
+        scroll_y.config(command=self.tree.yview)
+
+        widths = [100, 80, 110, 80, 200]
+        for col, w in zip(cols, widths):
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=w, anchor="center")
+
+        self.tree.tag_configure("income", foreground="#27ae60")
+        self.tree.tag_configure("expense", foreground="#e74c3c")
+
+        self.tree.pack(fill="both", expand=True)
+
+        tk.Button(parent, text="Delete Selected", command=self._delete_selected,
+                  bg="#e74c3c", fg="white", relief="flat", padx=12, pady=8,
+                  cursor="hand2").pack(pady=5)
+
+    def _build_budget_tab(self, parent):
+        top = tk.Frame(parent, bg="white")
+        top.pack(fill="x", padx=10, pady=10)
+
+        tk.Label(top, text="Set Monthly Budget by Category",
+             font=("Helvetica", 15, "bold"), bg="white").pack(anchor="w")
+
+        self.budget_entries = {}
+        categories = ["Food", "Rent", "Transport", "Entertainment",
+                      "Utilities", "Healthcare", "Savings", "Other"]
+
+        grid = tk.Frame(top, bg="white")
+        grid.pack(fill="x", pady=5)
+
+        for i, cat in enumerate(categories):
+            tk.Label(grid, text=cat, bg="white", width=14, anchor="w", font=("Helvetica", 12)).grid(
+                row=i // 2, column=(i % 2) * 2, padx=5, pady=3, sticky="w")
+            e = tk.Entry(grid, width=12, font=("Helvetica", 12))
+            e.insert(0, "0")
+            e.grid(row=i // 2, column=(i % 2) * 2 + 1, padx=5, pady=3, ipady=3)
+            self.budget_entries[cat] = e
+
+        tk.Button(top, text="Update Budget Chart", command=self._show_budget_chart,
+                  bg="#2980b9", fg="white", relief="flat", padx=12, pady=8,
+                  cursor="hand2").pack(pady=6, anchor="w")
+
+        goal_frame = tk.Frame(top, bg="white")
+        goal_frame.pack(fill="x", pady=(6, 2))
+        tk.Label(goal_frame, text="Monthly Savings Goal ($)", bg="white", font=("Helvetica", 12)).pack(side="left")
+        self.savings_goal_entry = tk.Entry(goal_frame, width=12, font=("Helvetica", 12))
+        self.savings_goal_entry.insert(0, "500")
+        self.savings_goal_entry.pack(side="left", padx=8, ipady=3)
+        tk.Button(goal_frame, text="Check Goal", command=self._update_savings_goal_status,
+                  bg="#16a085", fg="white", relief="flat", padx=12, pady=8,
+                  cursor="hand2").pack(side="left")
+
+        self.savings_goal_status = tk.Label(
+            top,
+            text="",
+            bg="white",
+            fg="#555",
+            justify="left",
+            font=("Helvetica", 12),
+        )
+        self.savings_goal_status.pack(anchor="w", pady=(6, 0))
+
+        self.budget_canvas_frame = tk.Frame(parent, bg="white")
+        self.budget_canvas_frame.pack(fill="both", expand=True)
+
+    def _build_ai_tab(self, parent):
+        controls = tk.Frame(parent, bg="white")
+        controls.pack(fill="x", padx=10, pady=10)
+
+        tk.Label(controls, text="Ollama URL", bg="white", font=("Helvetica", 11, "bold")).grid(
+            row=0, column=0, sticky="w", padx=(0, 6))
+        self.ollama_url_entry = tk.Entry(controls, width=38, font=("Helvetica", 12))
+        self.ollama_url_entry.insert(0, OLLAMA_URL)
+        self.ollama_url_entry.grid(row=0, column=1, sticky="w", padx=(0, 16))
+
+        tk.Label(controls, text="Model", bg="white", font=("Helvetica", 11, "bold")).grid(
+            row=0, column=2, sticky="w", padx=(0, 6))
+        self.ollama_model_entry = tk.Entry(controls, width=22, font=("Helvetica", 12))
+        self.ollama_model_entry.insert(0, "llama3.2")
+        self.ollama_model_entry.grid(row=0, column=3, sticky="w")
+
+        prompt_row = tk.Frame(parent, bg="white")
+        prompt_row.pack(fill="x", padx=10)
+        tk.Label(prompt_row, text="One-shot advice focus (optional)", bg="white", font=("Helvetica", 11, "bold")).pack(anchor="w")
+        self.ai_focus_entry = tk.Entry(prompt_row, font=("Helvetica", 12))
+        self.ai_focus_entry.pack(fill="x", pady=(2, 8))
+        self.ai_focus_entry.insert(0, "How can I reduce monthly expenses and improve savings?")
+
+        action_row = tk.Frame(parent, bg="white")
+        action_row.pack(fill="x", padx=10, pady=(0, 8))
+        tk.Button(action_row, text="Generate Advice", command=self._request_ai_advice,
+                  bg="#34495e", fg="white", relief="flat", padx=14, pady=7,
+                  cursor="hand2").pack(side="left")
+        tk.Button(action_row, text="New Chat", command=self._start_new_chat,
+                  bg="#7f8c8d", fg="white", relief="flat", padx=14, pady=7,
+                  cursor="hand2").pack(side="left", padx=(8, 0))
+
+        self.ai_status = tk.Label(action_row, text="", bg="white", fg="#666", font=("Helvetica", 12))
+        self.ai_status.pack(side="left", padx=12)
+
+        self.ai_output = tk.Text(parent, wrap="word", height=15, bg="#fbfbfb", fg="#222", font=("Helvetica", 12))
+        self.ai_output.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.ai_output.insert(
+            tk.END,
+            "AI Chat is ready. Ask about budgets, transactions, savings, or spending patterns.\n\n",
+        )
+
+        scroll = ttk.Scrollbar(self.ai_output, orient="vertical", command=self.ai_output.yview)
+        self.ai_output.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+
+        chat_row = tk.Frame(parent, bg="white")
+        chat_row.pack(fill="x", padx=10, pady=(0, 10))
+        self.ai_chat_entry = tk.Entry(chat_row, font=("Helvetica", 12))
+        self.ai_chat_entry.pack(side="left", fill="x", expand=True)
+        self.ai_chat_entry.insert(0, "How can I improve my monthly cash flow?")
+        self.ai_chat_entry.bind("<Return>", self._send_chat_message_event)
+        tk.Button(chat_row, text="Send", command=self._send_chat_message,
+                  bg="#2c3e50", fg="white", relief="flat", padx=16, pady=6,
+                  cursor="hand2").pack(side="left", padx=(8, 0))
+
+        suggested_wrap = tk.Frame(parent, bg="white")
+        suggested_wrap.pack(fill="x", padx=10, pady=(0, 10))
+        tk.Label(
+            suggested_wrap,
+            text="Suggested Questions (click to send)",
+            bg="white",
+            font=("Helvetica", 11, "bold"),
+        ).pack(anchor="w", pady=(0, 4))
+
+        buttons_wrap = tk.Frame(suggested_wrap, bg="white")
+        buttons_wrap.pack(fill="x")
+        for i, question in enumerate(self.suggested_questions):
+            tk.Button(
+                buttons_wrap,
+                text=question,
+                command=lambda q=question: self._use_suggested_question(q),
+                bg="#ecf0f1",
+                fg="#2c3e50",
+                relief="flat",
+                anchor="w",
+                cursor="hand2",
+                padx=10,
+                pady=6,
+            ).grid(row=i // 2, column=i % 2, sticky="ew", padx=4, pady=3)
+
+        buttons_wrap.grid_columnconfigure(0, weight=1)
+        buttons_wrap.grid_columnconfigure(1, weight=1)
+
+    def _build_history_tab(self, parent):
+        controls = tk.Frame(parent, bg="white")
+        controls.pack(fill="x", padx=10, pady=10)
+
+        tk.Label(controls, text="Model", bg="white", font=("Helvetica", 11, "bold")).grid(row=0, column=0, sticky="w")
+        self.history_model_filter = tk.Entry(controls, width=16, font=("Helvetica", 12))
+        self.history_model_filter.grid(row=0, column=1, padx=(6, 14), sticky="w")
+
+        tk.Label(controls, text="Focus Contains", bg="white", font=("Helvetica", 11, "bold")).grid(row=0, column=2, sticky="w")
+        self.history_focus_filter = tk.Entry(controls, width=28, font=("Helvetica", 12))
+        self.history_focus_filter.grid(row=0, column=3, padx=(6, 14), sticky="w")
+
+        tk.Button(controls, text="Refresh", command=self._refresh_history_table,
+                bg="#34495e", fg="white", relief="flat", padx=10, pady=5,
+                  cursor="hand2").grid(row=0, column=4, padx=(0, 6))
+        tk.Button(controls, text="Clear Filters", command=self._clear_history_filters,
+                bg="#95a5a6", fg="white", relief="flat", padx=10, pady=5,
+                  cursor="hand2").grid(row=0, column=5)
+        tk.Button(controls, text="Export CSV", command=self._export_filtered_history_csv,
+              bg="#2980b9", fg="white", relief="flat", padx=10, pady=5,
+              cursor="hand2").grid(row=0, column=6, padx=(8, 6))
+        tk.Button(controls, text="Export JSONL", command=self._export_filtered_history_jsonl,
+              bg="#16a085", fg="white", relief="flat", padx=10, pady=5,
+              cursor="hand2").grid(row=0, column=7)
+
+        table_wrap = tk.Frame(parent, bg="white")
+        table_wrap.pack(fill="both", expand=True, padx=10)
+
+        columns = ("timestamp", "model", "focus", "advice")
+        self.history_tree = ttk.Treeview(table_wrap, columns=columns, show="headings")
+        self.history_tree.heading("timestamp", text="Timestamp")
+        self.history_tree.heading("model", text="Model")
+        self.history_tree.heading("focus", text="Focus")
+        self.history_tree.heading("advice", text="Advice Preview")
+        self.history_tree.column("timestamp", width=155, anchor="center")
+        self.history_tree.column("model", width=100, anchor="center")
+        self.history_tree.column("focus", width=260, anchor="w")
+        self.history_tree.column("advice", width=360, anchor="w")
+        self.history_tree.pack(side="left", fill="both", expand=True)
+        self.history_tree.bind("<<TreeviewSelect>>", self._on_history_select)
+
+        history_scroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.history_tree.yview)
+        history_scroll.pack(side="right", fill="y")
+        self.history_tree.configure(yscrollcommand=history_scroll.set)
+
+        detail_wrap = tk.Frame(parent, bg="white")
+        detail_wrap.pack(fill="both", expand=True, padx=10, pady=(8, 10))
+        tk.Label(detail_wrap, text="Selected Advice", bg="white", font=("Helvetica", 11, "bold")).pack(anchor="w")
+        self.history_detail_text = tk.Text(detail_wrap, wrap="word", height=9, bg="#fbfbfb", fg="#222", font=("Helvetica", 12))
+        self.history_detail_text.pack(fill="both", expand=True)
+
+        self.history_records = []
+        self._refresh_history_table()
+
+    def _ensure_date_column(self):
+        if "Date" not in self.df.columns:
+            self.df["Date"] = pd.NaT
+            return
+        self.df["Date"] = pd.to_datetime(self.df["Date"], errors="coerce")
+
+    def _add_transaction(self):
+        try:
+            entry_date = pd.to_datetime(self.entry_date.get())
+            t_type = self.entry_type.get()
+            category = self.entry_category.get().strip()
+            amount = float(self.entry_amount.get())
+            desc = self.entry_desc.get().strip()
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please check your date and amount fields.")
+            return
+
+        if amount <= 0:
+            messagebox.showerror("Invalid Amount", "Amount must be greater than 0.")
+            return
+
+        new_row = pd.DataFrame([{
+            "Date": entry_date,
+            "Type": t_type,
+            "Category": category,
+            "Amount": amount,
+            "Description": desc
+        }])
+        self.df = pd.concat([self.df, new_row], ignore_index=True)
+        self._ensure_date_column()
+        save_data(self.df)
+        self.entry_amount.delete(0, tk.END)
+        self.entry_desc.delete(0, tk.END)
+        self.refresh_all()
+
+    def _delete_selected(self):
+        selected = self.tree.selection()
+        if not selected:
+            return
+        for item in selected:
+            idx = self.tree.index(item)
+            self.df = self.df.drop(self.df.index[idx]).reset_index(drop=True)
+        save_data(self.df)
+        self.refresh_all()
+
+    def refresh_all(self):
+        self._ensure_date_column()
+        self._refresh_summary()
+        self._refresh_table()
+        self._show_charts()
+        self._update_savings_goal_status(show_popup=False)
+        self._check_budget_overruns()
+
+    def _refresh_summary(self):
+        for w in self.summary_frame.winfo_children():
+            w.destroy()
+
+        income = self.df[self.df["Type"] == "Income"]["Amount"].sum()
+        expenses = self.df[self.df["Type"] == "Expense"]["Amount"].sum()
+        balance = income - expenses
+
+        items = [("Total Income", f"${income:,.2f}", "#27ae60"),
+                 ("Total Expenses", f"${expenses:,.2f}", "#e74c3c"),
+                 ("Net Balance", f"${balance:,.2f}", "#2980b9" if balance >= 0 else "#e74c3c")]
+
+        for label, value, color in items:
+            row = tk.Frame(self.summary_frame, bg="#f0f2f5")
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=label, bg="#f0f2f5", font=("Helvetica", 12),
+                     fg="#555").pack(side="left")
+            tk.Label(row, text=value, bg="#f0f2f5", font=("Helvetica", 13, "bold"),
+                     fg=color).pack(side="right")
+
+    def _refresh_table(self):
+        self.tree.delete(*self.tree.get_children())
+        for _, row in self.df.sort_values("Date", ascending=False).iterrows():
+            tag = "income" if row["Type"] == "Income" else "expense"
+            self.tree.insert("", "end", values=(
+                str(row["Date"])[:10],
+                row["Type"],
+                row["Category"],
+                f"${row['Amount']:,.2f}",
+                row["Description"]
+            ), tags=(tag,))
+
+    def _show_charts(self):
+        for w in self.chart_frame.winfo_children():
+            w.destroy()
+
+        if self.df.empty:
+            tk.Label(self.chart_frame, text="No data yet. Add transactions to see charts.",
+                     bg="white", font=("Helvetica", 12), fg="#888").pack(expand=True)
+            return
+
+        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+        fig.patch.set_facecolor("white")
+
+        expenses = self.df[self.df["Type"] == "Expense"].groupby("Category")["Amount"].sum()
+        if not expenses.empty:
+            axes[0].pie(expenses, labels=expenses.index, autopct="%1.1f%%",
+                        startangle=140, textprops={"fontsize": 8})
+            axes[0].set_title("Expenses by Category", fontsize=10)
+        else:
+            axes[0].text(0.5, 0.5, "No expenses", ha="center", va="center")
+            axes[0].set_title("Expenses by Category", fontsize=10)
+
+        monthly = self.df.copy()
+        monthly["Month"] = monthly["Date"].dt.to_period("M").astype(str)
+        grouped = monthly.groupby(["Month", "Type"])["Amount"].sum().unstack(fill_value=0)
+        if not grouped.empty:
+            grouped.plot(kind="bar", ax=axes[1], color=["#e74c3c", "#27ae60"], edgecolor="none")
+            axes[1].set_title("Monthly Income vs Expenses", fontsize=10)
+            axes[1].set_xlabel("")
+            axes[1].tick_params(axis="x", labelrotation=30, labelsize=7)
+            axes[1].legend(fontsize=8)
+        else:
+            axes[1].text(0.5, 0.5, "No data", ha="center", va="center")
+
+        fig.tight_layout()
+        canvas = FigureCanvasTkAgg(fig, master=self.chart_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+        plt.close(fig)
+
+        
+END OF CODE
+
+After you explain everything, give me:
+- a beginner study roadmap for this exact project
+- a list of Python topics to practice next
+- 5 mini coding exercises based on this app
