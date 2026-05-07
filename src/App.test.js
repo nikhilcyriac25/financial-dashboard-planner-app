@@ -1,8 +1,19 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
-test('renders dashboard heading', () => {
+jest.mock('./supabaseClient', () => ({
+  supabase: {
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: null } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      signOut: () => Promise.resolve(),
+    },
+  },
+}));
+
+test('renders login form when no session exists', async () => {
   render(<App />);
-  const headingElement = screen.getByRole('heading', { name: /personal finance dashboard/i });
-  expect(headingElement).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument();
+  });
 });
