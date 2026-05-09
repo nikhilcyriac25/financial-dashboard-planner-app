@@ -12,11 +12,12 @@ import csv
 import calendar
 from urllib import request, error
 
-DATA_FILE = "finance_data.csv"
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(_APP_DIR, "finance_data.csv")
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-ADVICE_CSV_FILE = "ai_advice_history.csv"
-ADVICE_JSONL_FILE = "ai_advice_history.jsonl"
+ADVICE_CSV_FILE = os.path.join(_APP_DIR, "ai_advice_history.csv")
+ADVICE_JSONL_FILE = os.path.join(_APP_DIR, "ai_advice_history.jsonl")
 
 # ---------- Data Layer ----------
 
