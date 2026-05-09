@@ -1,70 +1,117 @@
-# Getting Started with Create React App
+# Personal Finance Dashboard Planner App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A Python desktop application for tracking income, expenses, budgets, and savings — with an integrated local AI financial advisor powered by Ollama.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## Features
 
-### `npm start`
+- **Transactions tab** — Add, view, and delete income and expense entries with date, category, amount, and description
+- **Charts tab** — Visual breakdown of spending by category and monthly income vs. expense bar charts (matplotlib)
+- **Budget tab** — Set monthly spending limits per category; get automatic alerts when you go over budget
+- **Savings Goal** — Set a monthly savings target and track whether you're on pace to hit it
+- **AI Advisor tab** — Get one-shot financial advice based on your real transaction data using a local Ollama AI model
+- **AI Chat tab** — Have a back-and-forth conversation with the AI advisor; includes suggested starter questions
+- **AI History tab** — Browse, search, and export all past AI advice and chat responses (CSV and JSONL formats)
+- **Data persistence** — All transactions and AI history are saved locally to CSV files and reload automatically on launch
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Requirements
 
-### `npm test`
+### Python
+Python 3.9 or higher is required. [Download Python](https://www.python.org/downloads/)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Python packages
+Install the required packages with:
 
-### `npm run build`
+```bash
+pip install pandas matplotlib
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Tkinter is included with standard Python on Windows and macOS. On Linux, install it with:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```bash
+sudo apt install python3-tk
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Ollama (for AI features)
+The AI advisor requires [Ollama](https://ollama.com) running locally.
 
-### `npm run eject`
+1. Download and install Ollama from https://ollama.com
+2. Pull the model used by the app:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```bash
+ollama pull llama3.2
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+3. Ollama must be running in the background before you launch the app. It starts automatically on most systems after install, or you can start it manually:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```bash
+ollama serve
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+The app connects to Ollama at `http://localhost:11434`. No internet connection is needed for AI features once the model is downloaded.
 
-## Learn More
+---
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## How to Run
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Option 1 — With a visible terminal (good for debugging)
 
-### Code Splitting
+```bash
+python finance_dashboard.py
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### Option 2 — Without a terminal window (clean desktop launch, Windows)
 
-### Analyzing the Bundle Size
+```bash
+pythonw finance_dashboard.py
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+> On Windows with Miniforge/Anaconda, use the full path if `python` is not on your PATH:
+> ```
+> C:\Users\YourName\miniforge3\python.exe finance_dashboard.py
+> ```
 
-### Making a Progressive Web App
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Files in This Project
 
-### Advanced Configuration
+| File | Purpose |
+|------|---------|
+| `finance_dashboard.py` | The main application — run this to launch the app |
+| `finance_data.csv` | Auto-created on first use; stores all your transactions |
+| `ai_advice_history.csv` | Auto-created; stores all AI advice and chat history |
+| `ai_advice_history.jsonl` | Same history in JSONL format for easy parsing |
+| `ai_study_bundle_gemini.txt` | Full code + teaching prompt for use with Gemini AI |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+---
 
-### Deployment
+## Setting Up on a New Device
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+1. Install Python 3.9+ from https://www.python.org/downloads/
+2. Clone or download this repository
+3. Open a terminal in the project folder and install dependencies:
+   ```bash
+   pip install pandas matplotlib
+   ```
+4. Install Ollama from https://ollama.com and pull the model:
+   ```bash
+   ollama pull llama3.2
+   ```
+5. Run the app:
+   ```bash
+   python finance_dashboard.py
+   ```
 
-### `npm run build` fails to minify
+The app will create `finance_data.csv` and the AI history files automatically on first launch.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+---
+
+## Notes
+
+- The `node_modules/`, `src/`, `public/`, and `package.json` files in this folder are leftover scaffolding from an initial React setup and are not used by the app.
+- All data is stored locally on your machine — nothing is sent to the cloud.
+- AI features work fully offline once the Ollama model is downloaded.
+
