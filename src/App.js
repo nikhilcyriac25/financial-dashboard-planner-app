@@ -4,7 +4,7 @@ import Auth from './components/Auth';
 import Overview from './components/Overview';
 import Transactions from './components/Transactions';
 import Budget from './components/Budget';
-import AdviceHistory from './components/AdviceHistory';
+import AiAdvisor from './components/AiAdvisor';
 import './App.css';
 
 const TABS = ['Overview', 'Transactions', 'Budget', 'AI Advice'];
@@ -61,7 +61,7 @@ function App() {
         {activeTab === 'Overview'      && <Overview      userId={userId} />}
         {activeTab === 'Transactions'  && <Transactions  userId={userId} />}
         {activeTab === 'Budget'        && <Budget        userId={userId} />}
-        {activeTab === 'AI Advice'     && <AdviceHistory userId={userId} />}
+        {activeTab === 'AI Advice'     && <AiAdvisor     userId={userId} />}
       </main>
     </div>
   );
